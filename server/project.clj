@@ -5,9 +5,9 @@
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [savagematt.toshtogo/client "0.7.1-SNAPSHOT"]
 
-                 [org.clojure/clojurescript "1.7.48"]
+                 [org.clojure/clojurescript "1.9.229"]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
-                 [org.omcljs/om "0.9.0"]
+                 [org.omcljs/om "1.0.0-alpha46"]
                  [cljsjs/d3 "3.5.5-3"]
                  [cljs-ajax "0.3.10"]
                  [secretary "1.2.3"]
@@ -35,12 +35,14 @@
              :dev {:dependencies [[javax.servlet/servlet-api "2.5"]
                                   [midje "1.7.0"]
                                   [http-kit.fake "0.2.1"]
-                                  [figwheel-sidecar "0.4.0"]]
+                                  [com.cemerick/piggieback "0.2.1"]
+                                  [org.clojure/tools.nrepl "0.2.10"]
+                                  [figwheel-sidecar "0.5.4-6"]]
 
                    :plugins      [[lein-midje "3.1.0"]
                                   [lein-ring "0.8.8"]
                                   [lein-cljsbuild "1.0.5"]
-                                  [lein-figwheel "0.4.1"]
+                                  [lein-figwheel "0.5.8"]
                                   [lein-set-version "0.4.1"]
                                   [midje-junit-formatter "0.1.0-SNAPSHOT"]]}}
 

@@ -6,57 +6,84 @@
 
 (enable-console-print!)
 
-(println "Hello world!")
+(def init-data
+  {:page/one [{:id 1 :success true}
+              {:id 2 :success false}
+              {:id 3 :success true}]
+   :page/two [{:id 3 :success false}
+              {:id 4 :success true}
+              {:id 5 :success true}]})
 
-(def app-state (atom {:page [1 2 3]
-                      :jobs [{:job 1} {:job 2} {:job 3}]}))
+(defmulti read om/dispatch)
 
-(defmulti read (fn [env key params] key))
-
-(defmethod read :jobs
-  [{:keys [state] :as env} key {:keys [start end]}]
-  {:value (subvec (:jobs @state) start end)}) 
-
-(defmethod read :default
-  [{:keys [state] :as env} key params]
+(defn get-jobs [state key]
   (let [st @state]
-    (if-let [[_ v] (find st key)]
-      {:value v}
-      {:value :not-found})))
+    (into [] (map #(get-in st %)) (get st key))))
 
-(defn mutate
+(defmethod read :page/one
   [{:keys [state] :as env} key params]
-  (if (= 'add-job key)
-    {:value {:keys [:jobs]}
-     :action #(swap! state update-in [:jobs] conj {:job 9000})}
-    {:value :not-found}))
+  {:value (get-jobs state key)})
 
-(defui JobBody
-  static om/IQueryParams
-  (params [this]
-          {:start 0 :end 2})
+(defmethod read :page/two
+  [{:keys [state] :as env} key params]
+  {:value (get-jobs state key)})
+
+(defmulti mutate om/dispatch)
+
+(defmethod mutate 'success/toggle
+  [{:keys [state]} _ {:keys [id]}]
+  {:action
+   (fn []
+     (swap! state update-in [:jobs/by-id id :success] not))})
+
+(defui Job
+  static om/Ident
+  (ident [this {:keys [id]}]
+         [:jobs/by-id id])
   static om/IQuery
   (query [this]
-         '[:page (:jobs {:start ?start :end ?end})])
+         '[:id :success])
   Object
   (render [this]
-          (let [{:keys [jobs page]} (om/props this)]
+          (let [{:keys [id success] :as props} (om/props this)]
             (dom/div nil
-                     (dom/div nil page)
-                     (dom/button
-                       #js {:onClick (fn [e] (om/transact! this '[(add-job)]))}
-                       "Add a job!")
-                     (dom/div nil
-                              (with-out-str
-                                (pprint jobs))))))) 
+                     (dom/div #js {:onClick #(om/transact! this `[(success/toggle ~props)])}
+                              (str "id: ," id ", success: " success)))))) 
+
+(def job
+  (om/factory Job {:keyfn :id}))
+
+(defui PageView
+  Object
+  (render [this]
+          (let [page (om/props this)]
+            (apply dom/ul nil
+                   (map job page)))))
+
+(def page-view
+  (om/factory PageView)) 
+
+(defui RootView
+  static om/IQuery
+  (query [this]
+         (let [subquery (om/get-query Job)]
+           `[{:page/one ~subquery} {:page/two ~subquery}]))
+  Object
+  (render [this]
+          (let [{:keys [page/one page/two]} (om/props this)]
+            (apply dom/div nil
+                   [(dom/h2 nil "Page one")
+                    (page-view one)
+                    (dom/h2 nil "Page two")
+                    (page-view two)]))))
 
 (def reconciler
   (om/reconciler
-    {:state app-state
+    {:state init-data
      :parser (om/parser {:read read
                          :mutate mutate})}))
 
 (om/add-root!
   reconciler
-  JobBody
+  RootView
   (gdom/getElement "app"))

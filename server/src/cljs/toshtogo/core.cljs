@@ -1,5 +1,7 @@
 (ns toshtogo.core
+  (:require-macros [cljs.core.async.macros :refer [go-loop]])
   (:require [goog.dom :as gdom]
+            [cljs.core.async :as async :refer [<! >! put! chan]]
             [om.next :as om :refer-macros [defui]]
             [om.dom :as dom]
             [cljs.pprint :refer [pprint]]))
@@ -7,12 +9,12 @@
 (enable-console-print!)
 
 (def init-data
-  {:page/one [{:id 1 :success true}
-              {:id 2 :success false}
-              {:id 3 :success true}]
-   :page/two [{:id 3 :success false}
-              {:id 4 :success true}
-              {:id 5 :success true}]})
+  {:page/one [{:job-id 1 :outcome true}
+              {:job-id 2 :outcome false}
+              {:job-id 3 :outcome true}]
+   :page/two [{:job-id 3 :outcome false}
+              {:job-id 4 :outcome true}
+              {:job-id 5 :outcome true}]})
 
 (defmulti read om/dispatch)
 
@@ -21,37 +23,40 @@
     (into [] (map #(get-in st %)) (get st key))))
 
 (defmethod read :page/one
-  [{:keys [state] :as env} key params]
-  {:value (get-jobs state key)})
+  [{:keys [state ast] :as env} key params]
+  (pprint @state)
+  {:value (get-jobs state key)
+   :api ast})
 
 (defmethod read :page/two
-  [{:keys [state] :as env} key params]
-  {:value (get-jobs state key)})
+  [{:keys [state ast] :as env} key params]
+  {:value (get-jobs state key)
+   :api ast})
 
 (defmulti mutate om/dispatch)
 
-(defmethod mutate 'success/toggle
-  [{:keys [state]} _ {:keys [id]}]
+(defmethod mutate 'outcome/toggle
+  [{:keys [state]} _ {:keys [job-id]}]
   {:action
    (fn []
-     (swap! state update-in [:jobs/by-id id :success] not))})
+     (swap! state update-in [:jobs/by-job-id job-id :outcome] not))})
 
 (defui Job
   static om/Ident
-  (ident [this {:keys [id]}]
-         [:jobs/by-id id])
+  (ident [this {:keys [job-id]}]
+         [:jobs/by-job-id job-id])
   static om/IQuery
   (query [this]
-         '[:id :success])
+         '[:job-id :outcome])
   Object
   (render [this]
-          (let [{:keys [id success] :as props} (om/props this)]
+          (let [{:keys [job-id outcome] :as props} (om/props this)]
             (dom/div nil
-                     (dom/div #js {:onClick #(om/transact! this `[(success/toggle ~props)])}
-                              (str "id: ," id ", success: " success)))))) 
+                     (dom/div #js {:onClick #(om/transact! this `[(outcome/toggle ~props)])}
+                              (str "job-id: " job-id ", outcome: " outcome)))))) 
 
 (def job
-  (om/factory Job {:keyfn :id}))
+  (om/factory Job {:keyfn :job-id}))
 
 (defui PageView
   Object
@@ -77,11 +82,31 @@
                     (dom/h2 nil "Page two")
                     (page-view two)]))))
 
+(defn remotes-loop [c]
+  (go-loop [[query cb] (<! c)]
+           (let [response (str "Reponse to: " query)] 
+             (cb {:hardcoded-response-key response}))
+           (recur (<! c))))
+
+(defmulti remote-query)
+
+(defn send-to-chan [c]
+  (fn [remote-query cb]
+    (println :remote-query remote-query)
+    (let [ast (om/query->ast remote-query)]
+      (put! c [remote-query cb]))))
+
+(def remotes-chan (chan))
+
 (def reconciler
   (om/reconciler
     {:state init-data
      :parser (om/parser {:read read
-                         :mutate mutate})}))
+                         :mutate mutate})
+     :send (send-to-chan remotes-chan)
+     :remotes [:api]}))
+
+(remotes-loop remotes-chan)
 
 (om/add-root!
   reconciler

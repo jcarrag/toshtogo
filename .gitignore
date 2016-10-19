@@ -19,3 +19,5 @@ server/resources/public/js/compiled
 server/figwheel_server.log
 server/dev-target
 scratch.clj
+*.swp
+.cljs_rhino_repl
